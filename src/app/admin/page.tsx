@@ -10,10 +10,12 @@ type Task = {
   task_date: string;
   title: string;
   category: string;
+  description?: string | null;
 };
 
 export default function AdminPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const load = async () => {
     const { data } = await supabase
@@ -58,28 +60,40 @@ export default function AdminPage() {
         {tasks.map((t) => (
           <li
             key={t.id}
-            className="bg-white p-4 shadow rounded flex justify-between"
+            className="bg-white p-4 shadow rounded flex justify-between items-start"
           >
             <div>
               <p className="font-semibold">{t.title}</p>
               <p className="text-sm text-gray-500">
                 {t.task_date} — {t.category}
               </p>
+              {t.description && <p className="text-sm mt-1">{t.description}</p>}
             </div>
-            {editingTask && (
-              <EditTaskModal
-                task={editingTask}
-                onSave={saveEdit}
-                onClose={() => setEditingTask(null)}
-              />
-            )}
 
-            <button onClick={() => deleteTask(t.id)} className="text-red-600">
-              Delete
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setEditingTask(t)}
+                className="text-blue-600"
+              >
+                Edit
+              </button>
+
+              <button onClick={() => deleteTask(t.id)} className="text-red-600">
+                Delete
+              </button>
+            </div>
           </li>
         ))}
       </ul>
+
+      {/* EDIT MODAL — placed OUTSIDE map */}
+      {editingTask && (
+        <EditTaskModal
+          task={editingTask}
+          onSave={saveEdit}
+          onClose={() => setEditingTask(null)}
+        />
+      )}
     </main>
   );
 }
