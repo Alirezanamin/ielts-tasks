@@ -73,6 +73,7 @@ export default function AdminCalendar() {
         title,
         category,
         description,
+        expected_minutes: 30,
       },
     ]);
 
