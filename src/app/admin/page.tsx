@@ -9,8 +9,12 @@ type Task = {
   id: number;
   task_date: string;
   title: string;
+  description: string | null;
   category: string;
-  description?: string | null;
+  is_done: boolean;
+  feedback: string | null;
+  expected_minutes: number | null;
+  actual_minutes: number | null;
 };
 
 export default function AdminPage() {

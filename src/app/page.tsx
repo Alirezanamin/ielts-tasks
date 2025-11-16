@@ -39,7 +39,7 @@ export default function StudentHome() {
   const loadTaskCounts = async () => {
     const { data } = await supabase.from("tasks").select("task_date");
     const counts: Record<string, number> = {};
-    data?.forEach((t: any) => {
+    data?.forEach((t) => {
       counts[t.task_date] = (counts[t.task_date] || 0) + 1;
     });
     setTaskCount(counts);
@@ -58,20 +58,24 @@ export default function StudentHome() {
       .from("tasks")
       .update({ is_done: !task.is_done })
       .eq("id", task.id);
+
     loadTasks(selectedDate);
   };
 
   const updateActualMinutes = async (taskId: number, minutes: number) => {
     if (!minutes || minutes <= 0) return;
+
     await supabase
       .from("tasks")
       .update({ actual_minutes: minutes })
       .eq("id", taskId);
+
     loadTasks(selectedDate);
   };
 
   const saveFeedback = async (feedback: string) => {
     if (!feedbackTask) return;
+
     await supabase.from("tasks").update({ feedback }).eq("id", feedbackTask.id);
 
     setFeedbackTask(null);
@@ -92,83 +96,60 @@ export default function StudentHome() {
         <p className="text-gray-500">No tasks for this day.</p>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {tasks.map((task) => (
           <div
             key={task.id}
-            className={`p-4 shadow rounded transition ${
-              task.is_done ? "bg-green-100 border border-green-300" : "bg-white"
+            className={`p-4 shadow rounded border ${
+              task.is_done ? "bg-green-100 border-green-300" : "bg-white"
             }`}
           >
-            <div className="flex justify-between gap-4">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold">{task.title}</h3>
-                {task.category !== "other" && (
-                  <span className="text-sm text-blue-600">{task.category}</span>
-                )}
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="font-semibold">{task.title}</p>
                 {task.description && (
-                  <p className="text-gray-700 mt-1">{task.description}</p>
+                  <p className="text-sm text-gray-700">{task.description}</p>
                 )}
-
-                {/* Time info */}
-                <p className="text-sm text-gray-600 mt-2">
-                  Expected:{" "}
-                  <span className="font-semibold">
-                    {task.expected_minutes ?? 30} min
-                  </span>
-                  {typeof task.actual_minutes === "number" && (
-                    <>
-                      {" "}
-                      • Actual:{" "}
-                      <span className="font-semibold">
-                        {task.actual_minutes} min
-                      </span>
-                    </>
-                  )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Expected: {task.expected_minutes ?? 30} min
                 </p>
+                {task.actual_minutes && (
+                  <p className="text-xs text-gray-500">
+                    Actual: {task.actual_minutes} min
+                  </p>
+                )}
               </div>
 
-              <div className="flex flex-col items-center">
-                <input
-                  type="checkbox"
-                  checked={task.is_done}
-                  onChange={() => toggleDone(task)}
-                  className="w-5 h-5"
-                />
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => toggleDone(task)}
+                  className={`px-2 py-1 rounded text-sm ${
+                    task.is_done
+                      ? "bg-yellow-600 text-white"
+                      : "bg-green-600 text-white"
+                  }`}
+                >
+                  {task.is_done ? "Undo" : "Done"}
+                </button>
+
+                <button
+                  onClick={() => setFeedbackTask(task)}
+                  className="px-2 py-1 bg-blue-600 text-white rounded text-sm"
+                >
+                  Feedback
+                </button>
               </div>
             </div>
 
-            {/* Actual time input (after done) */}
-            {task.is_done && (
-              <div className="mt-3 flex items-center gap-2">
-                <label className="text-sm text-gray-700">
-                  Time spent (minutes):
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  defaultValue={task.actual_minutes || ""}
-                  onBlur={(e) =>
-                    updateActualMinutes(task.id, Number(e.target.value))
-                  }
-                  className="border p-1 rounded w-24 text-sm"
-                />
-              </div>
-            )}
-
-            {/* Feedback */}
-            <button
-              onClick={() => setFeedbackTask(task)}
-              className="mt-3 text-sm text-blue-600 underline"
-            >
-              Add / View Feedback
-            </button>
-
-            {task.feedback && (
-              <p className="mt-2 text-sm bg-blue-50 p-2 rounded">
-                <strong>Your Feedback:</strong> {task.feedback}
-              </p>
-            )}
+            <input
+              type="number"
+              placeholder="Actual minutes"
+              className="mt-3 border p-2 w-40 rounded"
+              defaultValue={task.actual_minutes ?? ""}
+              onBlur={(e) =>
+                updateActualMinutes(task.id, Number(e.target.value))
+              }
+            />
           </div>
         ))}
       </div>

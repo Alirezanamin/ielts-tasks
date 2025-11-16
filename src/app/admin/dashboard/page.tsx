@@ -7,10 +7,13 @@ import { supabase } from "@/lib/supabaseClient";
 type Task = {
   id: number;
   task_date: string;
+  title: string;
+  description: string | null;
+  category: string;
   is_done: boolean;
+  feedback: string | null;
   expected_minutes: number | null;
   actual_minutes: number | null;
-  category: string | null;
 };
 
 export default function AdminDashboard() {

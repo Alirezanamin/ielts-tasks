@@ -43,6 +43,27 @@ export default function TemplateDetailPage() {
   const [applyWeeks, setApplyWeeks] = useState(4);
   const [applying, setApplying] = useState(false);
 
+  // NEW — flexible weekday selection
+  const weekdayOptions = [
+    { id: 1, name: "Monday" },
+    { id: 2, name: "Tuesday" },
+    { id: 3, name: "Wednesday" },
+    { id: 4, name: "Thursday" },
+    { id: 5, name: "Friday" },
+    { id: 6, name: "Saturday" },
+    { id: 7, name: "Sunday" },
+  ];
+
+  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([
+    1, 2, 3, 4, 5, 6, 7,
+  ]); // default: all days
+
+  const toggleWeekday = (day: number) => {
+    setSelectedWeekdays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+    );
+  };
+
   const loadTemplate = async () => {
     setLoading(true);
     const { data: tplData } = await supabase
@@ -97,11 +118,13 @@ export default function TemplateDetailPage() {
       .from("template_tasks")
       .delete()
       .eq("id", taskId);
+
     if (error) {
       console.error(error);
       alert("Could not delete template task");
       return;
     }
+
     loadTemplate();
   };
 
@@ -128,17 +151,20 @@ export default function TemplateDetailPage() {
 
     for (let week = 0; week < applyWeeks; week++) {
       for (const t of templateTasks || []) {
+        // ⭐ NEW: Only schedule if user selected the weekday
+        if (!selectedWeekdays.includes(t.day_number)) continue;
+
         const date = baseDate
           .add(week, "week")
-          .add((t as any).day_number - 1, "day")
+          .add(t.day_number - 1, "day")
           .format("YYYY-MM-DD");
 
         rowsToInsert.push({
           task_date: date,
-          title: (t as any).title,
-          description: (t as any).description,
-          category: (t as any).category || "other",
-          expected_minutes: (t as any).expected_minutes ?? 30,
+          title: t.title,
+          description: t.description,
+          category: t.category || "other",
+          expected_minutes: t.expected_minutes ?? 30,
         });
       }
     }
@@ -147,6 +173,7 @@ export default function TemplateDetailPage() {
       const { error: insertError } = await supabase
         .from("tasks")
         .insert(rowsToInsert);
+
       if (insertError) {
         console.error(insertError);
         alert("Could not apply template");
@@ -176,9 +203,31 @@ export default function TemplateDetailPage() {
         )}
       </section>
 
-      {/* Apply template */}
+      {/* ===================== APPLY TEMPLATE ===================== */}
       <section className="bg-white shadow p-4 rounded">
-        <h2 className="text-lg font-semibold mb-2">Apply this template</h2>
+        <h2 className="text-lg font-semibold mb-3">Apply this template</h2>
+
+        {/* NEW — Weekday selector */}
+        <div className="mb-4">
+          <label className="block font-medium mb-1">Active Week Days</label>
+          <div className="grid grid-cols-3 gap-2">
+            {weekdayOptions.map((day) => (
+              <label
+                key={day.id}
+                className="flex items-center gap-2 border p-2 rounded cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedWeekdays.includes(day.id)}
+                  onChange={() => toggleWeekday(day.id)}
+                />
+                {day.name}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Start date and weeks */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
           <div>
             <label className="block text-sm mb-1">Start date</label>
@@ -189,17 +238,19 @@ export default function TemplateDetailPage() {
               onChange={(e) => setApplyStartDate(e.target.value)}
             />
           </div>
+
           <div>
             <label className="block text-sm mb-1">Repeat weeks</label>
             <input
               type="number"
               min={1}
-              max={8}
+              max={24}
               className="border p-2 rounded w-full"
               value={applyWeeks}
               onChange={(e) => setApplyWeeks(Number(e.target.value))}
             />
           </div>
+
           <button
             onClick={applyTemplate}
             disabled={applying}
@@ -210,21 +261,24 @@ export default function TemplateDetailPage() {
         </div>
       </section>
 
-      {/* Add template tasks */}
+      {/* ===================== ADD TEMPLATE TASKS ===================== */}
       <section className="bg-white shadow p-4 rounded">
         <h2 className="text-lg font-semibold mb-3">Template tasks</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
           <div>
-            <label className="block text-sm mb-1">Day number (1–7)</label>
-            <input
-              type="number"
-              min={1}
-              max={7}
+            <label className="block text-sm mb-1">Day of week</label>
+            <select
               className="border p-2 rounded w-full"
               value={dayNumber}
               onChange={(e) => setDayNumber(Number(e.target.value))}
-            />
+            >
+              {weekdayOptions.map((day) => (
+                <option key={day.id} value={day.id}>
+                  {day.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="md:col-span-3">
@@ -285,7 +339,7 @@ export default function TemplateDetailPage() {
         </button>
       </section>
 
-      {/* List template tasks */}
+      {/* ===================== LIST TEMPLATE TASKS ===================== */}
       <section className="bg-white shadow p-4 rounded">
         <h2 className="text-lg font-semibold mb-3">Existing tasks</h2>
         <div className="space-y-2">
@@ -304,6 +358,7 @@ export default function TemplateDetailPage() {
                   <p className="text-sm mt-1">{t.description}</p>
                 )}
               </div>
+
               <button
                 onClick={() => deleteTemplateTask(t.id)}
                 className="text-red-600"
