@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import dayjs from "dayjs";
 import { supabase } from "@/lib/supabaseClient";
 import EditTaskModal from "@/components/EditTaskModal";
 
@@ -27,19 +28,25 @@ export default function AdminPage() {
       .select("*")
       .order("task_date", { ascending: true });
 
-    setTasks(data as Task[]);
+    setTasks((data as Task[]) || []);
   };
 
   useEffect(() => {
     load();
   }, []);
 
+  /**********************************************
+   * DELETE TASK
+   **********************************************/
   const deleteTask = async (id: number) => {
     if (!confirm("Delete this task?")) return;
     await supabase.from("tasks").delete().eq("id", id);
     load();
   };
 
+  /**********************************************
+   * SAVE EDIT
+   **********************************************/
   const saveEdit = async (updates: any) => {
     if (!editingTask) return;
 
@@ -49,17 +56,62 @@ export default function AdminPage() {
     load();
   };
 
+  /**********************************************
+   * COUNT VOCAB WORDS BY DATE
+   **********************************************/
+  const [vocabCounts, setVocabCounts] = useState<Record<string, number>>({});
+
+  const loadVocabCounts = async () => {
+    const { data } = await supabase.from("vocab_words").select("created_at");
+
+    const counts: Record<string, number> = {};
+
+    data?.forEach((w) => {
+      const d = w.created_at.slice(0, 10);
+      counts[d] = (counts[d] || 0) + 1;
+    });
+
+    setVocabCounts(counts);
+  };
+
+  useEffect(() => {
+    loadVocabCounts();
+  }, []);
+
   return (
-    <main className="max-w-3xl mx-auto p-4">
-      <h1 className="text-xl font-bold mb-4">Admin — All Tasks</h1>
+    <main className="max-w-3xl mx-auto p-4 space-y-4">
+      <h1 className="text-xl font-bold">Admin — All Tasks</h1>
 
       <Link
         href="/admin/calendar"
-        className="inline-block mb-4 text-blue-600 underline"
+        className="inline-block text-blue-600 underline"
       >
         Calendar Management →
       </Link>
 
+      {/* VOCAB QUICK VIEW */}
+      <section className="bg-white shadow p-4 rounded">
+        <h2 className="font-semibold mb-2">Vocabulary Progress</h2>
+
+        <ul className="text-sm space-y-1">
+          {Object.keys(vocabCounts).length === 0 && (
+            <p className="text-gray-500 text-sm">No vocabulary added yet.</p>
+          )}
+
+          {Object.entries(vocabCounts).map(([date, count]) => (
+            <li key={date}>
+              <Link
+                href={`/vocabulary?date=${date}`}
+                className="text-blue-600 underline"
+              >
+                {date}: {count} word{count > 1 ? "s" : ""}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* TASKS LIST */}
       <ul className="space-y-3">
         {tasks.map((t) => (
           <li
@@ -71,6 +123,18 @@ export default function AdminPage() {
               <p className="text-sm text-gray-500">
                 {t.task_date} — {t.category}
               </p>
+
+              {t.expected_minutes !== null && (
+                <p className="text-xs text-gray-500">
+                  Expected: {t.expected_minutes} min
+                </p>
+              )}
+              {t.actual_minutes !== null && (
+                <p className="text-xs text-gray-500">
+                  Actual: {t.actual_minutes} min
+                </p>
+              )}
+
               {t.description && <p className="text-sm mt-1">{t.description}</p>}
             </div>
 
@@ -90,7 +154,7 @@ export default function AdminPage() {
         ))}
       </ul>
 
-      {/* EDIT MODAL — placed OUTSIDE map */}
+      {/* MODAL */}
       {editingTask && (
         <EditTaskModal
           task={editingTask}
