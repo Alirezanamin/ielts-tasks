@@ -414,9 +414,7 @@ export default function AdminCalendar() {
       {editingTask && (
         <EditTaskModal
           task={editingTask}
-          onSave={(data) =>
-            saveEdit(data, editingTask.id, selectedDate, loadTasks, loadCounts)
-          }
+          onSave={saveEdit}
           onClose={() => setEditingTask(null)}
         />
       )}
