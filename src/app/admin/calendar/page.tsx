@@ -22,6 +22,15 @@ type RepeatHistoryEntry = {
   count: number;
 };
 
+type InsertTaskRow = {
+  task_date: string;
+  title: string;
+  description: string | null;
+  category: string;
+  expected_minutes: number | null;
+  batch_id: string;
+};
+
 // ------------------ Weekday List --------------------
 const weekdays = [
   { label: "Sun", value: 0 },
@@ -141,7 +150,7 @@ export default function AdminCalendar() {
     );
 
     const batchId = crypto.randomUUID();
-    const rowsToInsert = [];
+    const rowsToInsert: InsertTaskRow[] = [];
 
     previewRows.forEach((row) => {
       const key = row.targetDate + "---" + row.title;
