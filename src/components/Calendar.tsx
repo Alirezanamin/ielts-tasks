@@ -1,112 +1,225 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import dayjs from "dayjs";
 import jalaliday from "jalaliday";
 import "dayjs/locale/fa";
+import { supabase } from "@/lib/supabaseClient";
+import Calendar from "@/components/Calendar";
+import FeedbackModal from "@/components/FeedbackModal";
 
 dayjs.extend(jalaliday);
 
-interface CalendarProps {
-  selectedDate: string;
-  onSelect: (date: string) => void;
-  taskCountByDate?: Record<string, number>;
-  usePersianCalendar: boolean; // NEW
-}
+type Task = {
+  id: number;
+  task_date: string;
+  title: string;
+  description: string | null;
+  category: string;
+  is_done: boolean;
+  feedback: string | null;
+  expected_minutes: number | null;
+  actual_minutes: number | null;
+};
 
-export default function Calendar({
-  selectedDate,
-  onSelect,
-  taskCountByDate = {},
-  usePersianCalendar,
-}: CalendarProps) {
-  /** Pick calendar mode (Gregorian / Jalali) */
-  const makeDate = (d?: string) =>
-    usePersianCalendar ? dayjs(d).calendar("jalali").locale("fa") : dayjs(d);
+export default function StudentHome() {
+  const [selectedDate, setSelectedDate] = useState(
+    dayjs().format("YYYY-MM-DD")
+  );
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskCountByDate, setTaskCount] = useState<Record<string, number>>({});
+  const [feedbackTask, setFeedbackTask] = useState<Task | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const today = makeDate().format("YYYY-MM-DD");
+  // 🔁 Persian / Gregorian toggle
+  const [usePersianCalendar, setUsePersianCalendar] = useState(false);
 
-  const [month, setMonth] = useState(makeDate(selectedDate));
+  const loadTasks = async (date: string) => {
+    setLoading(true);
 
-  /** Re-sync month when toggle switches */
+    const { data } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("task_date", date)
+      .order("id", { ascending: true });
+
+    setTasks((data as Task[]) || []);
+    setLoading(false);
+  };
+
+  const loadTaskCounts = async () => {
+    const { data } = await supabase.from("tasks").select("task_date");
+    const counts: Record<string, number> = {};
+    data?.forEach((t) => {
+      counts[t.task_date] = (counts[t.task_date] || 0) + 1;
+    });
+    setTaskCount(counts);
+  };
+
   useEffect(() => {
-    setMonth(makeDate(selectedDate));
-  }, [selectedDate, usePersianCalendar]);
+    loadTaskCounts();
+  }, []);
 
-  const startOfMonth = month.startOf("month");
-  const daysInMonth = month.daysInMonth();
-  const startWeekday = startOfMonth.day(); // Notice: Jalali uses same weekday numbering
+  useEffect(() => {
+    loadTasks(selectedDate);
+  }, [selectedDate]);
 
-  /** FIXED: Functional updates */
-  const nextMonth = () => setMonth((m) => m.add(1, "month"));
-  const prevMonth = () => setMonth((m) => m.subtract(1, "month"));
+  const toggleDone = async (task: Task) => {
+    await supabase
+      .from("tasks")
+      .update({ is_done: !task.is_done })
+      .eq("id", task.id);
 
-  /** Weekday labels */
-  const gregorianLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const persianLabels = ["ش", "ی", "د", "س", "چ", "پ", "ج"];
+    loadTasks(selectedDate);
+  };
 
-  const labels = usePersianCalendar ? persianLabels : gregorianLabels;
+  const updateActualMinutes = async (taskId: number, minutes: number) => {
+    if (!minutes || minutes <= 0) return;
+
+    await supabase
+      .from("tasks")
+      .update({ actual_minutes: minutes })
+      .eq("id", taskId);
+
+    loadTasks(selectedDate);
+  };
+
+  const saveFeedback = async (feedback: string) => {
+    if (!feedbackTask) return;
+
+    await supabase.from("tasks").update({ feedback }).eq("id", feedbackTask.id);
+
+    setFeedbackTask(null);
+    loadTasks(selectedDate);
+  };
+
+  // 🔍 Helper to format date + weekday based on toggle
+  const d = dayjs(selectedDate);
+  const gregDate = d.format("YYYY-MM-DD");
+  const gregWeekday = d.format("dddd");
+
+  const persian = d.calendar("jalali").locale("fa");
+  const persianDate = persian.format("YYYY/MM/DD");
+  const persianWeekday = persian.format("dddd");
+
+  const displayDate = usePersianCalendar ? persianDate : gregDate;
+  const displayWeekday = usePersianCalendar ? persianWeekday : gregWeekday;
 
   return (
-    <div className="bg-white shadow rounded p-4 mb-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-4">
-        <button onClick={prevMonth} className="px-2 py-1 bg-gray-200 rounded">
-          ←
-        </button>
+    <main className="max-w-3xl mx-auto p-4">
+      <Calendar
+        selectedDate={selectedDate}
+        onSelect={setSelectedDate}
+        taskCountByDate={taskCountByDate}
+        usePersianCalendar={usePersianCalendar} // NEW
+      />
 
-        <h2 className="text-lg font-semibold">{month.format("MMMM YYYY")}</h2>
+      {/* Header with Persian/Gregorian toggle */}
+      <div className="flex justify-between items-center mb-3">
+        <h2 className="text-xl font-semibold">
+          Tasks for {displayDate}{" "}
+          <span className="text-gray-500 text-sm">({displayWeekday})</span>
+        </h2>
 
-        <button onClick={nextMonth} className="px-2 py-1 bg-gray-200 rounded">
-          →
+        <button
+          onClick={() => setUsePersianCalendar((v) => !v)}
+          className="px-3 py-1 text-sm rounded border border-gray-300 bg-white hover:bg-gray-100"
+        >
+          {usePersianCalendar ? "Switch to Gregorian" : "تقویم شمسی"}
         </button>
       </div>
 
-      {/* Weekdays */}
-      <div className="grid grid-cols-7 text-center font-medium text-gray-600 mb-2">
-        {labels.map((l) => (
-          <div key={l}>{l}</div>
-        ))}
-      </div>
+      {/* Loader */}
+      {loading && (
+        <div className="flex justify-center py-6">
+          <div className="animate-spin h-8 w-8 border-4 border-gray-300 border-t-blue-600 rounded-full"></div>
+        </div>
+      )}
 
-      {/* Days */}
-      <div className="grid grid-cols-7 text-center gap-1">
-        {/* Empty cells */}
-        {Array.from({ length: startWeekday }).map((_, i) => (
-          <div key={i} />
-        ))}
+      {/* No tasks (only if not loading) */}
+      {!loading && tasks.length === 0 && (
+        <p className="text-gray-500">No tasks for this day.</p>
+      )}
 
-        {/* Day buttons */}
-        {Array.from({ length: daysInMonth }).map((_, i) => {
-          const dateObj = startOfMonth.add(i, "day");
-          const date = dateObj.calendar("gregory").format("YYYY-MM-DD");
-
-          const isSelected = date === selectedDate;
-          const isToday = date === today;
-          const taskCount = taskCountByDate[date] || 0;
-
-          return (
-            <button
-              key={date}
-              onClick={() => onSelect(date)}
-              className={`
-                p-2 rounded relative
-                ${isSelected ? "bg-blue-600 text-white" : "bg-gray-100"}
-                ${isToday ? "border border-blue-600" : ""}
-                hover:bg-blue-200 transition
-              `}
+      {/* Task list */}
+      {!loading && (
+        <div className="space-y-2">
+          {tasks.map((task) => (
+            <div
+              key={task.id}
+              className={`p-4 shadow rounded border ${
+                task.is_done ? "bg-green-100 border-green-300" : "bg-white"
+              }`}
             >
-              {dateObj.format("D")}
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-semibold">{task.title}</p>
 
-              {taskCount > 0 && (
-                <span className="absolute top-0 right-0 bg-blue-600 text-white text-[10px] px-1 rounded-full">
-                  {taskCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+                  {/* 🏷 Skill badge (category) */}
+                  {task.category && (
+                    <span className="inline-block mt-1 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
+                      {task.category}
+                    </span>
+                  )}
+
+                  {task.description && (
+                    <p className="text-sm text-gray-700 mt-1">
+                      {task.description}
+                    </p>
+                  )}
+
+                  <p className="text-xs text-gray-500 mt-1">
+                    Expected: {task.expected_minutes ?? 30} min
+                  </p>
+                  {task.actual_minutes && (
+                    <p className="text-xs text-gray-500">
+                      Actual: {task.actual_minutes} min
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => toggleDone(task)}
+                    className={`px-2 py-1 rounded text-sm ${
+                      task.is_done
+                        ? "bg-yellow-600 text-white"
+                        : "bg-green-600 text-white"
+                    }`}
+                  >
+                    {task.is_done ? "Undo" : "Done"}
+                  </button>
+
+                  <button
+                    onClick={() => setFeedbackTask(task)}
+                    className="px-2 py-1 bg-blue-600 text-white rounded text-sm"
+                  >
+                    Feedback
+                  </button>
+                </div>
+              </div>
+
+              <input
+                type="number"
+                placeholder="Actual minutes"
+                className="mt-3 border p-2 w-40 rounded"
+                defaultValue={task.actual_minutes ?? ""}
+                onBlur={(e) =>
+                  updateActualMinutes(task.id, Number(e.target.value))
+                }
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {feedbackTask && (
+        <FeedbackModal
+          initial={feedbackTask.feedback}
+          onSave={saveFeedback}
+          onClose={() => setFeedbackTask(null)}
+        />
+      )}
+    </main>
   );
 }
