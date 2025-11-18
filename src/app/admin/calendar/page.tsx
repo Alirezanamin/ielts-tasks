@@ -7,7 +7,7 @@ import Calendar from "@/components/Calendar";
 import EditTaskModal from "@/components/EditTaskModal";
 
 // ------------------ Types --------------------
-type Task = {
+export type Task = {
   id: number;
   task_date: string;
   title: string;
@@ -31,6 +31,12 @@ type InsertTaskRow = {
   batch_id: string;
 };
 
+type PreviewRow = Task & { targetDate: string };
+
+type UpdateTaskFields = Partial<
+  Pick<Task, "title" | "description" | "category" | "expected_minutes">
+>;
+
 // ------------------ Weekday List --------------------
 const weekdays = [
   { label: "Sun", value: 0 },
@@ -53,25 +59,29 @@ export default function AdminCalendar() {
   const [repeatWeeks, setRepeatWeeks] = useState(4);
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([]);
   const [excludeHolidays, setExcludeHolidays] = useState(true);
-  const [everyXDays, setEveryXDays] = useState(0); // 0 means disabled
+  const [everyXDays, setEveryXDays] = useState(0);
   const [holidays, setHolidays] = useState<string[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewRows, setPreviewRows] = useState<any[]>([]);
+  const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
   const [usePersianCalendar] = useState(false);
 
   // ------------------ Load Tasks --------------------
   const loadTasks = async (date: string) => {
     const { data } = await supabase
-      .from("tasks")
+      .from<Task>("tasks")
       .select("*")
       .eq("task_date", date);
-    setTasks((data as Task[]) || []);
+
+    setTasks(data ?? []);
   };
 
   const loadCounts = async () => {
-    const { data } = await supabase.from("tasks").select("task_date");
+    const { data } = await supabase
+      .from<{ task_date: string }>("tasks")
+      .select("task_date");
+
     const counts: Record<string, number> = {};
-    data?.forEach((t: any) => {
+    (data ?? []).forEach((t) => {
       counts[t.task_date] = (counts[t.task_date] || 0) + 1;
     });
     setTaskCount(counts);
@@ -95,7 +105,7 @@ export default function AdminCalendar() {
   // ------------------ Generate Preview --------------------
   const generatePreview = async () => {
     const { data: sourceTasks } = await supabase
-      .from("tasks")
+      .from<Task>("tasks")
       .select("*")
       .eq("task_date", selectedDate);
 
@@ -104,27 +114,31 @@ export default function AdminCalendar() {
       return;
     }
 
-    const rows: any[] = [];
+    const rows: PreviewRow[] = [];
     const base = dayjs(selectedDate);
 
     // --------- Repeat Every X days ----------
     if (everyXDays > 0) {
       for (let i = 1; i <= repeatWeeks; i++) {
         const targetDate = base.add(i * everyXDays, "day").format("YYYY-MM-DD");
-
         if (excludeHolidays && holidays.includes(targetDate)) continue;
 
-        rows.push(...sourceTasks.map((t) => ({ ...t, targetDate })));
+        rows.push(
+          ...sourceTasks.map((t) => ({ ...t, targetDate } as PreviewRow))
+        );
       }
     } else {
       // --------- Repeat on Weekdays ----------
       for (let week = 0; week < repeatWeeks; week++) {
         for (const wd of selectedWeekdays) {
           const date = base.add(week, "week").day(wd).format("YYYY-MM-DD");
-
           if (excludeHolidays && holidays.includes(date)) continue;
 
-          rows.push(...sourceTasks.map((t) => ({ ...t, targetDate: date })));
+          rows.push(
+            ...sourceTasks.map(
+              (t) => ({ ...t, targetDate: date } as PreviewRow)
+            )
+          );
         }
       }
     }
@@ -142,18 +156,18 @@ export default function AdminCalendar() {
 
     // avoid duplicates
     const { data: existing } = await supabase
-      .from("tasks")
+      .from<{ task_date: string; title: string }>("tasks")
       .select("task_date, title");
 
     const existingSet = new Set(
-      existing?.map((e) => e.task_date + "---" + e.title)
+      (existing ?? []).map((e) => `${e.task_date}---${e.title}`)
     );
 
     const batchId = crypto.randomUUID();
     const rowsToInsert: InsertTaskRow[] = [];
 
     previewRows.forEach((row) => {
-      const key = row.targetDate + "---" + row.title;
+      const key = `${row.targetDate}---${row.title}`;
       if (!existingSet.has(key)) {
         rowsToInsert.push({
           task_date: row.targetDate,
@@ -208,7 +222,7 @@ export default function AdminCalendar() {
     loadCounts();
   };
 
-  const saveEdit = async (updates: any) => {
+  const saveEdit = async (updates: UpdateTaskFields) => {
     if (!editingTask) return;
 
     await supabase.from("tasks").update(updates).eq("id", editingTask.id);
@@ -225,7 +239,7 @@ export default function AdminCalendar() {
         selectedDate={selectedDate}
         onSelect={setSelectedDate}
         taskCountByDate={taskCountByDate}
-        usePersianCalendar={usePersianCalendar} // ✅ Add this
+        usePersianCalendar={usePersianCalendar}
       />
 
       {/* ---------------- Repeat Section ---------------- */}
@@ -333,7 +347,7 @@ export default function AdminCalendar() {
       <div className="bg-white p-4 shadow rounded mb-4">
         <h3 className="font-semibold mb-2">Add Task</h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+        <div className="grid grid-cols-1 md-grid-cols-3 gap-3 mb-3">
           <input
             type="text"
             placeholder="Task title"
