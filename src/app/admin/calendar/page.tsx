@@ -57,7 +57,7 @@ export default function AdminCalendar() {
   const [holidays, setHolidays] = useState<string[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewRows, setPreviewRows] = useState<any[]>([]);
-  const [repeatHistory, setRepeatHistory] = useState<RepeatHistoryEntry[]>([]);
+  const [usePersianCalendar] = useState(false);
 
   // ------------------ Load Tasks --------------------
   const loadTasks = async (date: string) => {
@@ -178,14 +178,6 @@ export default function AdminCalendar() {
     alert("Tasks repeated!");
   };
 
-  // ------------------ Undo Repeat --------------------
-  const undoBatch = async (batchId: string) => {
-    await supabase.from("tasks").delete().eq("batch_id", batchId);
-    await supabase.from("task_repeat_history").delete().eq("batch_id", batchId);
-
-    loadCounts();
-  };
-
   // ------------------ Add New Task --------------------
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("reading");
@@ -233,6 +225,7 @@ export default function AdminCalendar() {
         selectedDate={selectedDate}
         onSelect={setSelectedDate}
         taskCountByDate={taskCountByDate}
+        usePersianCalendar={usePersianCalendar} // ✅ Add this
       />
 
       {/* ---------------- Repeat Section ---------------- */}
