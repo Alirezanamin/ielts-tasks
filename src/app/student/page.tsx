@@ -2,9 +2,13 @@
 
 import { useEffect, useState } from "react";
 import dayjs from "dayjs";
+import jalaliday from "jalaliday";
+import "dayjs/locale/fa";
 import { supabase } from "@/lib/supabaseClient";
 import Calendar from "@/components/Calendar";
 import FeedbackModal from "@/components/FeedbackModal";
+
+dayjs.extend(jalaliday);
 
 type Task = {
   id: number;
@@ -25,11 +29,13 @@ export default function StudentHome() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [taskCountByDate, setTaskCount] = useState<Record<string, number>>({});
   const [feedbackTask, setFeedbackTask] = useState<Task | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const [loading, setLoading] = useState(false); // ⭐ added
+  // 🔁 Persian / Gregorian toggle
+  const [usePersianCalendar, setUsePersianCalendar] = useState(false);
 
   const loadTasks = async (date: string) => {
-    setLoading(true); // ⭐ start loader
+    setLoading(true);
 
     const { data } = await supabase
       .from("tasks")
@@ -38,7 +44,7 @@ export default function StudentHome() {
       .order("id", { ascending: true });
 
     setTasks((data as Task[]) || []);
-    setLoading(false); // ⭐ end loader
+    setLoading(false);
   };
 
   const loadTaskCounts = async () => {
@@ -87,22 +93,43 @@ export default function StudentHome() {
     loadTasks(selectedDate);
   };
 
+  // 🔍 Helper to format date + weekday based on toggle
+  const d = dayjs(selectedDate);
+  const gregDate = d.format("YYYY-MM-DD");
+  const gregWeekday = d.format("dddd");
+
+  const persian = d.calendar("jalali").locale("fa");
+  const persianDate = persian.format("YYYY/MM/DD");
+  const persianWeekday = persian.format("dddd");
+
+  const displayDate = usePersianCalendar ? persianDate : gregDate;
+  const displayWeekday = usePersianCalendar ? persianWeekday : gregWeekday;
+
   return (
     <main className="max-w-3xl mx-auto p-4">
       <Calendar
         selectedDate={selectedDate}
         onSelect={setSelectedDate}
         taskCountByDate={taskCountByDate}
+        usePersianCalendar={usePersianCalendar} // NEW
       />
 
-      <h2 className="text-xl font-semibold mb-3">
-        Tasks for {selectedDate}{" "}
-        <span className="text-gray-500 text-sm">
-          ({dayjs(selectedDate).format("dddd")})
-        </span>
-      </h2>
+      {/* Header with Persian/Gregorian toggle */}
+      <div className="flex justify-between items-center mb-3">
+        <h2 className="text-xl font-semibold">
+          Tasks for {displayDate}{" "}
+          <span className="text-gray-500 text-sm">({displayWeekday})</span>
+        </h2>
 
-      {/* ⭐ Loader */}
+        <button
+          onClick={() => setUsePersianCalendar((v) => !v)}
+          className="px-3 py-1 text-sm rounded border border-gray-300 bg-white hover:bg-gray-100"
+        >
+          {usePersianCalendar ? "Switch to Gregorian" : "تقویم شمسی"}
+        </button>
+      </div>
+
+      {/* Loader */}
       {loading && (
         <div className="flex justify-center py-6">
           <div className="animate-spin h-8 w-8 border-4 border-gray-300 border-t-blue-600 rounded-full"></div>
@@ -128,7 +155,7 @@ export default function StudentHome() {
                 <div>
                   <p className="font-semibold">{task.title}</p>
 
-                  {/* ⭐ Skill Badge */}
+                  {/* 🏷 Skill badge (category) */}
                   {task.category && (
                     <span className="inline-block mt-1 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
                       {task.category}
@@ -144,7 +171,6 @@ export default function StudentHome() {
                   <p className="text-xs text-gray-500 mt-1">
                     Expected: {task.expected_minutes ?? 30} min
                   </p>
-
                   {task.actual_minutes && (
                     <p className="text-xs text-gray-500">
                       Actual: {task.actual_minutes} min
